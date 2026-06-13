@@ -10,7 +10,7 @@ const char *password = "Masuk#2024";
 
 // Konfigurasi Backend Node.js
 // IP Laptop Anda saat ini: 192.168.100.174
-const char *serverUrl = "http://192.168.100.174:3000/api/rfid/verify";
+const char *serverUrl = "https://rfid-door-one.vercel.app/api/rfid/verify";
 
 // Konfigurasi Pin RFID & Aktuator
 #define RST_PIN 22
