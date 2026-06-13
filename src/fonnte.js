@@ -1,4 +1,4 @@
-const fetch = require('node-fetch') || global.fetch;
+const axios = require('axios');
 require('dotenv').config();
 
 /**
@@ -9,19 +9,16 @@ require('dotenv').config();
 const sendFonnteMessage = async (target, text) => {
   try {
     const token = process.env.FONNTE_TOKEN || '4fJrYvEpjMHjR6H4JuX8';
-    const response = await fetch('https://api.fonnte.com/send', {
-      method: 'POST',
+    const response = await axios.post('https://api.fonnte.com/send', {
+      target: target,
+      message: text
+    }, {
       headers: {
         'Authorization': token,
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        target: target,
-        message: text
-      })
+      }
     });
-    const result = await response.json();
-    console.log(`✅ Fonnte Send API Result for ${target}:`, result.status);
+    console.log(`✅ Fonnte Send API Result for ${target}:`, response.data.status);
   } catch (error) {
     console.error('❌ Error sending message via Fonnte API:', error.message);
   }
