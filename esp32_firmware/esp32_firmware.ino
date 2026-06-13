@@ -3,6 +3,7 @@
 #include <MFRC522.h>
 #include <SPI.h>
 #include <WiFi.h>
+#include <Adafruit_Fingerprint.h>
 
 // Konfigurasi WiFi
 const char *ssid = "GPSKU";
@@ -11,6 +12,7 @@ const char *password = "Masuk#2024";
 // Konfigurasi Backend Node.js
 // IP Laptop Anda saat ini: 192.168.100.174
 const char *serverUrl = "https://rfid-door-one.vercel.app/api/rfid/verify";
+const char *serverUrlFingerprint = "https://rfid-door-one.vercel.app/api/rfid/fingerprint/verify";
 
 // Konfigurasi Pin RFID & Aktuator
 /* 
@@ -53,6 +55,10 @@ const int rs = 32, en = 33, d4 = 25, d5 = 26, d6 = 27, d7 = 14;
 LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
 
 MFRC522 mfrc522(SS_PIN, RST_PIN);
+
+// Inisialisasi Fingerprint menggunakan HardwareSerial 2 (Pin 16 dan 17)
+HardwareSerial mySerial(2);
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
 unsigned long lastReadTime = 0;
 const unsigned long DEBOUNCE_DELAY = 3000; // 3 detik
@@ -98,7 +104,16 @@ void setup() {
   delay(50); // Beri waktu ekstra untuk MFRC522 bangun
   mfrc522.PCD_DumpVersionToSerial(); // <--- TAMBAHAN UNTUK DIAGNOSA
 
-  Serial.println("Sistem Siap. Dekatkan kartu RFID ke reader...");
+  // Inisialisasi Sidik Jari
+  finger.begin(57600);
+  delay(5);
+  if (finger.verifyPassword()) {
+    Serial.println("Fingerprint sensor ditemukan!");
+  } else {
+    Serial.println("Fingerprint sensor TIDAK ditemukan :(");
+  }
+
+  Serial.println("Sistem Siap. Dekatkan kartu RFID atau Sidik Jari...");
   
   // Bunyi Bip 2x sebagai tanda mesin sudah nyala dan siap dipakai (Tanpa Laptop)
   digitalWrite(BUZZER_PIN, HIGH);
@@ -113,7 +128,24 @@ void setup() {
 }
 
 void loop() {
-  // Cek apakah ada kartu baru
+  // 1. Cek Sidik Jari
+  int fingerId = getFingerprintIDez();
+  if (fingerId != -1) {
+    if (millis() - lastReadTime < DEBOUNCE_DELAY) return;
+    lastReadTime = millis();
+    
+    Serial.println("Sidik Jari Terbaca ID: " + String(fingerId));
+    lcd.clear();
+    lcd.print("Memproses Jari..");
+    lcd.setCursor(0, 1);
+    lcd.print("ID: " + String(fingerId));
+    
+    verifyFingerprint(fingerId);
+    displayReady();
+    return;
+  }
+
+  // 2. Cek apakah ada kartu baru
   if (!mfrc522.PICC_IsNewCardPresent() || !mfrc522.PICC_ReadCardSerial()) {
     delay(50);
     return;
@@ -137,7 +169,7 @@ void loop() {
   Serial.println("UID Kartu: " + uidString);
 
   lcd.clear();
-  lcd.print("Memproses...");
+  lcd.print("Memproses Kartu.");
   lcd.setCursor(0, 1);
   lcd.print("UID: " + uidString);
 
@@ -236,5 +268,55 @@ void displayReady() {
   lcd.clear();
   lcd.print("Sistem Siap");
   lcd.setCursor(0, 1);
-  lcd.print("Tempelkan Kartu");
+  lcd.print("Kartu / Jari   ");
+}
+
+int getFingerprintIDez() {
+  uint8_t p = finger.getImage();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.image2Tz();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  p = finger.fingerFastSearch();
+  if (p != FINGERPRINT_OK)  return -1;
+
+  // found a match!
+  return finger.fingerID;
+}
+
+void verifyFingerprint(int fingerId) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverUrlFingerprint);
+    http.addHeader("Content-Type", "application/json");
+
+    String jsonPayload = "{\"fingerId\":" + String(fingerId) + "}";
+
+    Serial.println("Mengirim data ke: " + String(serverUrlFingerprint));
+    Serial.println("Payload: " + jsonPayload);
+
+    int httpResponseCode = http.POST(jsonPayload);
+
+    if (httpResponseCode == 200) {
+      Serial.println("Akses Diberikan!");
+      openDoor();
+    } else {
+      Serial.print("Akses Ditolak! Kode HTTP: ");
+      Serial.println(httpResponseCode);
+      accessDenied(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("Error: Tidak ada koneksi WiFi!");
+    lcd.clear();
+    lcd.print("Error:");
+    lcd.setCursor(0, 1);
+    lcd.print("WiFi Terputus!");
+
+    digitalWrite(LED_ERROR, HIGH);
+    delay(2000);
+    digitalWrite(LED_ERROR, LOW);
+  }
 }

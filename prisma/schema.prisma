@@ -10,11 +10,12 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  role      String   // Contoh: Admin, Staff, Guest
-  cards     Card[]
-  createdAt DateTime @default(now())
+  id           String        @id @default(uuid())
+  name         String
+  role         String        // Contoh: Admin, Staff, Guest
+  cards        Card[]
+  fingerprints Fingerprint[] // Relasi baru untuk sidik jari
+  createdAt    DateTime      @default(now())
 }
 
 model Card {
@@ -26,11 +27,21 @@ model Card {
   createdAt DateTime    @default(now())
 }
 
+model Fingerprint {
+  id        String      @id @default(uuid())
+  fingerId  Int         @unique // ID numerik dari memori sensor sidik jari (1-127)
+  status    CardStatus  @default(ACTIVE)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime    @default(now())
+}
+
 model AccessLog {
-  id        String    @id @default(uuid())
-  cardUid   String    // Disimpan sebagai plain string agar kartu tidak dikenal tetap bisa dilog
-  status    LogStatus
-  timestamp DateTime  @default(now())
+  id           String    @id @default(uuid())
+  cardUid      String?   // UID Kartu (opsional jika sidik jari)
+  fingerId     Int?      // ID Sidik Jari (opsional jika kartu)
+  status       LogStatus
+  timestamp    DateTime  @default(now())
 }
 
 enum CardStatus {
