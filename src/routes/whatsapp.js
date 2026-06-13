@@ -90,8 +90,8 @@ router.post('/webhook', async (req, res) => {
           await prisma.accessLog.create({
             data: {
               status: 'SUCCESS',
-              // Kita anggap credentialId untuk WA
-              credentialId: `WHATSAPP_${sender}`,
+              // Kita simpan nomor WA di kolom cardUid karena tabel tidak punya credentialId
+              cardUid: `WA_${sender}`,
             }
           });
 
