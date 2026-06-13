@@ -28,6 +28,13 @@ const formatDate = (date) => {
 
 // Webhook untuk Fonnte
 router.post('/webhook', async (req, res) => {
+  // DEBUGGING: Kirim isi mentah (payload) dari Fonnte langsung ke Telegram Admin 
+  // agar kita bisa melihat apa sebenarnya yang dikirimkan oleh Fonnte
+  try {
+    const { sendTelegramMessage } = require('../telegram');
+    await sendTelegramMessage(`🛠 *DEBUG FONNTE PAYLOAD:*\n\`\`\`json\n${JSON.stringify(req.body, null, 2)}\n\`\`\``);
+  } catch(e) {}
+
   // Fonnte mengirim data POST JSON atau Form-UrlEncoded
   // Struktur yang dikirim fonnte biasanya: { device, sender, message, ... }
   const { sender, message } = req.body;
