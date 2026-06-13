@@ -55,8 +55,7 @@ router.post('/webhook', async (req, res) => {
     if (!user) {
       // Jika nomor tidak terdaftar
       console.log(`Pesan dari nomor tak terdaftar (${sender}): ${message}`);
-      // Opsional: Balas pesan jika nomor tidak terdaftar (membutuhkan API Fonnte Send Message)
-      return res.status(200).json({ status: 'ignored', reason: 'Unregistered number' });
+      return res.status(200).json({ reply: '❌ Akses Ditolak: Nomor WhatsApp Anda tidak terdaftar dalam sistem.' });
     }
 
     const command = message.trim().toUpperCase();
@@ -74,7 +73,7 @@ router.post('/webhook', async (req, res) => {
           if (err) {
             console.error('Gagal mengirim perintah ke MQTT', err);
             client.end();
-            return res.status(500).json({ error: 'Gagal mengirim sinyal MQTT' });
+            return res.status(500).json({ reply: '⚠️ Maaf, terjadi kesalahan sistem saat menghubungi pintu.' });
           }
           
           console.log('Perintah BUKA berhasil dikirim ke MQTT.');
@@ -94,8 +93,7 @@ router.post('/webhook', async (req, res) => {
           await sendTelegramMessage(successMessage);
 
           return res.status(200).json({
-            status: 'success',
-            message: 'Perintah BUKA sedang diproses.'
+            reply: `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`
           });
         });
       });
@@ -103,7 +101,7 @@ router.post('/webhook', async (req, res) => {
       client.on('error', (err) => {
         console.error('Error koneksi MQTT', err);
         client.end();
-        return res.status(500).json({ error: 'MQTT Connection Error' });
+        return res.status(500).json({ reply: '⚠️ Maaf, gagal terhubung ke server pintu. Coba lagi nanti.' });
       });
 
       // Menambah timeout jika mqtt broker tidak merespon
@@ -112,13 +110,13 @@ router.post('/webhook', async (req, res) => {
         console.error('Timeout koneksi MQTT');
         client.end();
         if (!res.headersSent) {
-          res.status(504).json({ error: 'MQTT Broker Timeout' });
+          res.status(504).json({ reply: '⚠️ Maaf, pintu tidak merespon (Timeout).' });
         }
       }, 5000);
 
     } else {
       // Jika pesannya bukan BUKA
-      return res.status(200).json({ status: 'ignored', reason: 'Invalid command' });
+      return res.status(200).json({ reply: 'Format salah. Ketik kata "BUKA" untuk membuka pintu.' });
     }
 
   } catch (error) {
