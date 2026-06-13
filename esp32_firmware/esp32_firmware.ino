@@ -13,6 +13,17 @@ const char *password = "Masuk#2024";
 const char *serverUrl = "https://rfid-door-one.vercel.app/api/rfid/verify";
 
 // Konfigurasi Pin RFID & Aktuator
+/* 
+ * Panduan Wiring RFID RC522 ke ESP32:
+ * SDA  -> GPIO 21 (Ini adalah pin SS_PIN)
+ * SCK  -> GPIO 18
+ * MOSI -> GPIO 23
+ * MISO -> GPIO 19
+ * IRQ  -> (Tidak usah disambung)
+ * GND  -> GND
+ * RST  -> GPIO 22
+ * 3.3V -> 3.3V (AWAS: Jangan ke 5V atau VIN!)
+ */
 #define RST_PIN 22
 #define SS_PIN 21
 #define RELAY_PIN 15
@@ -21,6 +32,7 @@ const char *serverUrl = "https://rfid-door-one.vercel.app/api/rfid/verify";
 #define LED_ERROR 5
 
 /*
+
  * Konfigurasi Pin LCD 16x2 (Tanpa I2C)
  *
  * Panduan Wiring LCD ke ESP32:
@@ -46,7 +58,7 @@ unsigned long lastReadTime = 0;
 const unsigned long DEBOUNCE_DELAY = 3000; // 3 detik
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
 
   // Inisialisasi LCD
   lcd.begin(16, 2);
@@ -81,10 +93,22 @@ void setup() {
   delay(1000);
 
   // Inisialisasi SPI dan RFID
-  SPI.begin();
+  SPI.begin(18, 19, 23, 21); // (SCK, MISO, MOSI, SS) Paksa gunakan pin ini
   mfrc522.PCD_Init();
+  delay(50); // Beri waktu ekstra untuk MFRC522 bangun
+  mfrc522.PCD_DumpVersionToSerial(); // <--- TAMBAHAN UNTUK DIAGNOSA
 
   Serial.println("Sistem Siap. Dekatkan kartu RFID ke reader...");
+  
+  // Bunyi Bip 2x sebagai tanda mesin sudah nyala dan siap dipakai (Tanpa Laptop)
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(100);
+  digitalWrite(BUZZER_PIN, LOW);
+  delay(100);
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(100);
+  digitalWrite(BUZZER_PIN, LOW);
+
   displayReady();
 }
 
