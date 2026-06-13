@@ -73,53 +73,66 @@ router.post('/webhook', async (req, res) => {
       // Kirim pesan ke MQTT Broker
       const client = mqtt.connect(MQTT_BROKER_URL);
       
+      // Menambah timeout jika mqtt broker tidak merespon
+      const timeoutId = setTimeout(() => {
+        console.error('Timeout koneksi MQTT');
+        client.end();
+        if (!res.headersSent) {
+          res.status(504).json({ reply: '⚠️ Maaf, server pintu tidak merespon (Timeout).' });
+        }
+      }, 5000);
+
       client.on('connect', async () => {
+        clearTimeout(timeoutId); // Hapus timeout karena sudah terkoneksi
         console.log('Terkoneksi ke MQTT Broker, Mengirim perintah BUKA...');
         
         client.publish(MQTT_TOPIC, 'OPEN_DOOR', { qos: 1 }, async (err) => {
           if (err) {
             console.error('Gagal mengirim perintah ke MQTT', err);
             client.end();
-            return res.status(500).json({ reply: '⚠️ Maaf, terjadi kesalahan sistem saat menghubungi pintu.' });
+            if (!res.headersSent) {
+              return res.status(500).json({ reply: '⚠️ Maaf, terjadi kesalahan sistem saat menghubungi pintu.' });
+            }
           }
           
           console.log('Perintah BUKA berhasil dikirim ke MQTT.');
-          client.end(); // Tutup koneksi karena serverless function (hanya hidup sebentar)
+          client.end(); // Tutup koneksi
           
-          // Log ke database
-          await prisma.accessLog.create({
-            data: {
-              status: 'SUCCESS',
-              // Kita simpan nomor WA di kolom cardUid karena tabel tidak punya credentialId
-              cardUid: `WA_${sender}`,
+          try {
+            // Log ke database
+            await prisma.accessLog.create({
+              data: {
+                status: 'SUCCESS',
+                cardUid: `WA_${sender}`,
+              }
+            });
+
+            // Notifikasi Telegram
+            const successMessage = `✅ AKSES DIBERIKAN: Pintu Utama dibuka via WhatsApp oleh ${user.name} [${user.role}] pada ${formattedDate} WIB.`;
+            await sendTelegramMessage(successMessage);
+
+            if (!res.headersSent) {
+              return res.status(200).json({
+                reply: `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`
+              });
             }
-          });
-
-          // Notifikasi Telegram
-          const successMessage = `✅ AKSES DIBERIKAN: Pintu Utama dibuka via WhatsApp oleh ${user.name} [${user.role}] pada ${formattedDate} WIB.`;
-          await sendTelegramMessage(successMessage);
-
-          return res.status(200).json({
-            reply: `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`
-          });
+          } catch (dbError) {
+            console.error('Database Error:', dbError);
+            if (!res.headersSent) {
+              return res.status(500).json({ reply: '✅ Pintu terbuka, tetapi gagal mencatat log di database.' });
+            }
+          }
         });
       });
 
       client.on('error', (err) => {
+        clearTimeout(timeoutId);
         console.error('Error koneksi MQTT', err);
         client.end();
-        return res.status(500).json({ reply: '⚠️ Maaf, gagal terhubung ke server pintu. Coba lagi nanti.' });
-      });
-
-      // Menambah timeout jika mqtt broker tidak merespon
-      setTimeout(() => {
-        if (client.connected) return;
-        console.error('Timeout koneksi MQTT');
-        client.end();
         if (!res.headersSent) {
-          res.status(504).json({ reply: '⚠️ Maaf, pintu tidak merespon (Timeout).' });
+          return res.status(500).json({ reply: '⚠️ Maaf, gagal terhubung ke server pintu. Coba lagi nanti.' });
         }
-      }, 5000);
+      });
 
     } else {
       // Jika pesannya bukan BUKA
