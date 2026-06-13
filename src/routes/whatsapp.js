@@ -24,6 +24,28 @@ const formatDate = (date) => {
   }).format(date);
 };
 
+// Helper to send message via Fonnte API
+const sendFonnteMessage = async (target, text) => {
+  try {
+    const token = process.env.FONNTE_TOKEN || '4fJrYvEpjMHjR6H4JuX8';
+    const response = await fetch('https://api.fonnte.com/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        target: target,
+        message: text
+      })
+    });
+    const result = await response.json();
+    console.log('Fonnte Send API Result:', result);
+  } catch (error) {
+    console.error('Error sending message via Fonnte API:', error);
+  }
+};
+
 // Webhook untuk Fonnte
 router.post('/webhook', async (req, res) => {
   // Fonnte mengirim data POST JSON atau Form-UrlEncoded
@@ -63,7 +85,8 @@ router.post('/webhook', async (req, res) => {
     if (!user) {
       // Jika nomor tidak terdaftar
       console.log(`Pesan dari nomor tak terdaftar (${sender}): ${message}`);
-      return res.status(200).json({ reply: '❌ Akses Ditolak: Nomor WhatsApp Anda tidak terdaftar dalam sistem.' });
+      await sendFonnteMessage(sender, '❌ Akses Ditolak: Nomor WhatsApp Anda tidak terdaftar dalam sistem.');
+      return res.status(200).send('OK');
     }
 
     const command = message.trim().toUpperCase();
@@ -75,11 +98,12 @@ router.post('/webhook', async (req, res) => {
       const client = mqtt.connect(MQTT_BROKER_URL);
       
       // Menambah timeout jika mqtt broker tidak merespon
-      const timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(async () => {
         console.error('Timeout koneksi MQTT');
         client.end();
         if (!res.headersSent) {
-          res.status(504).json({ reply: '⚠️ Maaf, server pintu tidak merespon (Timeout).' });
+          await sendFonnteMessage(sender, '⚠️ Maaf, server pintu tidak merespon (Timeout).');
+          res.status(504).send('Timeout');
         }
       }, 5000);
 
@@ -92,7 +116,8 @@ router.post('/webhook', async (req, res) => {
             console.error('Gagal mengirim perintah ke MQTT', err);
             client.end();
             if (!res.headersSent) {
-              return res.status(500).json({ reply: '⚠️ Maaf, terjadi kesalahan sistem saat menghubungi pintu.' });
+              await sendFonnteMessage(sender, '⚠️ Maaf, terjadi kesalahan sistem saat menghubungi pintu.');
+              return res.status(500).send('MQTT Error');
             }
           }
           
@@ -113,31 +138,33 @@ router.post('/webhook', async (req, res) => {
             await sendTelegramMessage(successMessage);
 
             if (!res.headersSent) {
-              return res.status(200).json({
-                reply: `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`
-              });
+              await sendFonnteMessage(sender, `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`);
+              return res.status(200).send('OK');
             }
           } catch (dbError) {
             console.error('Database Error:', dbError);
             if (!res.headersSent) {
-              return res.status(500).json({ reply: '✅ Pintu terbuka, tetapi gagal mencatat log di database.' });
+              await sendFonnteMessage(sender, '✅ Pintu terbuka, tetapi gagal mencatat log di database.');
+              return res.status(500).send('DB Error');
             }
           }
         });
       });
 
-      client.on('error', (err) => {
+      client.on('error', async (err) => {
         clearTimeout(timeoutId);
         console.error('Error koneksi MQTT', err);
         client.end();
         if (!res.headersSent) {
-          return res.status(500).json({ reply: '⚠️ Maaf, gagal terhubung ke server pintu. Coba lagi nanti.' });
+          await sendFonnteMessage(sender, '⚠️ Maaf, gagal terhubung ke server pintu. Coba lagi nanti.');
+          return res.status(500).send('MQTT Connect Error');
         }
       });
 
     } else {
       // Jika pesannya bukan BUKA
-      return res.status(200).json({ reply: 'Format salah. Ketik kata "BUKA" untuk membuka pintu.' });
+      await sendFonnteMessage(sender, 'Format salah. Ketik kata "BUKA" untuk membuka pintu.');
+      return res.status(200).send('OK');
     }
 
   } catch (error) {
