@@ -3,7 +3,8 @@ const mqtt = require('mqtt');
 const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('@prisma/client');
-const { sendTelegramMessage } = require('../telegram');
+const { sendTelegramMessage, sendApprovalRequest } = require('../telegram');
+const { sendFonnteMessage } = require('../fonnte');
 
 const router = express.Router();
 const connectionString = process.env.DATABASE_URL;
@@ -24,27 +25,6 @@ const formatDate = (date) => {
   }).format(date);
 };
 
-// Helper to send message via Fonnte API
-const sendFonnteMessage = async (target, text) => {
-  try {
-    const token = process.env.FONNTE_TOKEN || '4fJrYvEpjMHjR6H4JuX8';
-    const response = await fetch('https://api.fonnte.com/send', {
-      method: 'POST',
-      headers: {
-        'Authorization': token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        target: target,
-        message: text
-      })
-    });
-    const result = await response.json();
-    console.log('Fonnte Send API Result:', result);
-  } catch (error) {
-    console.error('Error sending message via Fonnte API:', error);
-  }
-};
 
 // Webhook untuk Fonnte
 router.post('/webhook', async (req, res) => {
@@ -92,12 +72,17 @@ router.post('/webhook', async (req, res) => {
     const command = message.trim().toUpperCase();
 
     if (command === 'BUKA') {
-      // Perintah BUKA dikenali
-      
-      // Kirim pesan ke MQTT Broker
+      // Jika yang minta BUKA bukan Admin, alihkan ke Approval Telegram
+      if (user.role !== 'Admin') {
+        console.log(`User ${user.name} (${user.role}) meminta buka pintu. Mengirim request ke Telegram...`);
+        await sendApprovalRequest(sender, user.name);
+        await sendFonnteMessage(sender, '⏳ Permintaan buka pintu Anda telah diteruskan ke Admin. Harap tunggu persetujuan...');
+        return res.status(200).send('OK');
+      }
+
+      // Jika Admin, langsung buka pintu via MQTT
       const client = mqtt.connect(MQTT_BROKER_URL);
       
-      // Menambah timeout jika mqtt broker tidak merespon
       const timeoutId = setTimeout(async () => {
         console.error('Timeout koneksi MQTT');
         client.end();
@@ -108,7 +93,7 @@ router.post('/webhook', async (req, res) => {
       }, 5000);
 
       client.on('connect', async () => {
-        clearTimeout(timeoutId); // Hapus timeout karena sudah terkoneksi
+        clearTimeout(timeoutId);
         console.log('Terkoneksi ke MQTT Broker, Mengirim perintah BUKA...');
         
         client.publish(MQTT_TOPIC, 'OPEN_DOOR', { qos: 1 }, async (err) => {
@@ -122,10 +107,9 @@ router.post('/webhook', async (req, res) => {
           }
           
           console.log('Perintah BUKA berhasil dikirim ke MQTT.');
-          client.end(); // Tutup koneksi
+          client.end();
           
           try {
-            // Log ke database
             await prisma.accessLog.create({
               data: {
                 status: 'SUCCESS',
@@ -133,12 +117,11 @@ router.post('/webhook', async (req, res) => {
               }
             });
 
-            // Notifikasi Telegram
-            const successMessage = `✅ AKSES DIBERIKAN: Pintu Utama dibuka via WhatsApp oleh ${user.name} [${user.role}] pada ${formattedDate} WIB.`;
+            const successMessage = `✅ AKSES DIBERIKAN: Pintu Utama dibuka via WhatsApp secara langsung oleh Admin ${user.name} pada ${formattedDate} WIB.`;
             await sendTelegramMessage(successMessage);
 
             if (!res.headersSent) {
-              await sendFonnteMessage(sender, `✅ Halo ${user.name}, akses diberikan! Pintu sedang dibuka...`);
+              await sendFonnteMessage(sender, `✅ Halo Admin ${user.name}, pintu sedang dibuka!`);
               return res.status(200).send('OK');
             }
           } catch (dbError) {
@@ -162,7 +145,6 @@ router.post('/webhook', async (req, res) => {
       });
 
     } else {
-      // Jika pesannya bukan BUKA
       await sendFonnteMessage(sender, 'Format salah. Ketik kata "BUKA" untuk membuka pintu.');
       return res.status(200).send('OK');
     }

@@ -26,6 +26,31 @@ const sendTelegramMessage = async (message) => {
   }
 };
 
+const sendApprovalRequest = async (waNumber, userName) => {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+
+  try {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    await axios.post(url, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: `🔔 *Permintaan Akses Pintu*\n\nUser: *${userName}*\nWA: ${waNumber}\n\nApakah Anda menyetujui permintaan buka pintu ini?`,
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Setujui', callback_data: `approve_${waNumber}` },
+            { text: '❌ Tolak', callback_data: `reject_${waNumber}` }
+          ]
+        ]
+      }
+    });
+    console.log(`✅ Laporan approval Telegram berhasil dikirim`);
+  } catch (error) {
+    console.error('❌ Gagal mengirim approval Telegram:', error.response?.data || error.message);
+  }
+};
+
 module.exports = {
   sendTelegramMessage,
+  sendApprovalRequest,
 };

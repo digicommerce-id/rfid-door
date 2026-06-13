@@ -13,10 +13,12 @@ app.use(express.json());
 // Import routes
 const rfidRoutes = require('./routes/rfid');
 const whatsappRoutes = require('./routes/whatsapp');
+const telegramRoutes = require('./routes/telegram');
 
 // Setup routes
 app.use('/api/rfid', rfidRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/telegram', telegramRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
