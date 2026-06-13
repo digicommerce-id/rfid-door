@@ -73,7 +73,7 @@ router.post('/webhook', async (req, res) => {
 
     if (command === 'BUKA') {
       // Jika yang minta BUKA bukan Admin, alihkan ke Approval Telegram
-      if (user.role !== 'Admin') {
+      if (user.role.toUpperCase() !== 'ADMIN') {
         console.log(`User ${user.name} (${user.role}) meminta buka pintu. Mengirim request ke Telegram...`);
         await sendApprovalRequest(sender, user.name);
         await sendFonnteMessage(sender, '⏳ Permintaan buka pintu Anda telah diteruskan ke Admin. Harap tunggu persetujuan...');
