@@ -12,7 +12,8 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // Konfigurasi MQTT Broker
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://broker.hivemq.com';
+// Kita gunakan WebSocket (ws://) di port 8000 karena Vercel sering memblokir port TCP standar 1883
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'ws://broker.hivemq.com:8000/mqtt';
 const MQTT_TOPIC = process.env.MQTT_TOPIC || 'smartdoor_rfid_12345/command'; // Gunakan topik default yang agak random agar tidak bentrok
 
 // Helper to format date
