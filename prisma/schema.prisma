@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  role      String   // Contoh: Admin, Staff, Guest
+  cards     Card[]
+  createdAt DateTime @default(now())
+}
+
+model Card {
+  id        String      @id @default(uuid())
+  uid       String      @unique // ID Unik dari Kartu fisik RFID
+  status    CardStatus  @default(ACTIVE)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime    @default(now())
+}
+
+model AccessLog {
+  id        String    @id @default(uuid())
+  cardUid   String    // Disimpan sebagai plain string agar kartu tidak dikenal tetap bisa dilog
+  status    LogStatus
+  timestamp DateTime  @default(now())
+}
+
+enum CardStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum LogStatus {
+  SUCCESS
+  FAILED_UNKNOWN_CARD
+  FAILED_INACTIVE_CARD
+}
