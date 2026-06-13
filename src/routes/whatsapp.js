@@ -33,19 +33,26 @@ router.post('/webhook', async (req, res) => {
     return res.status(400).json({ error: 'Invalid webhook payload' });
   }
 
-  // Normalisasi nomor HP (misal: Fonnte mengirim dengan format "628xxx" atau "08xxx")
-  // Untuk amannya, kita cek menggunakan "ends with" atau pastikan format konsisten.
-  // Tapi asumsikan nomor tersimpan di database persis seperti format fonnte.
+  // Fonnte mengirim nomor dengan format awalan "62" (contoh: 62877...). 
+  // Sementara di database mungkin tersimpan dengan awalan "0" (0877...).
+  // Kita buat dua versi nomor untuk dicari di database:
+  let senderWith0 = sender;
+  let senderWith62 = sender;
   
-  // Format nomor Fonnte: 6281234567890. Format di DB mungkin 081234567890 atau 628...
-  // Mari kita cari data user yang memiliki whatsappNumber ini.
-  
+  if (sender.startsWith('62')) {
+    senderWith0 = '0' + sender.slice(2);
+  } else if (sender.startsWith('0')) {
+    senderWith62 = '62' + sender.slice(1);
+  }
+
   try {
     const user = await prisma.user.findFirst({
       where: {
-        whatsappNumber: {
-          equals: sender,
-        }
+        OR: [
+          { whatsappNumber: sender },
+          { whatsappNumber: senderWith0 },
+          { whatsappNumber: senderWith62 }
+        ]
       }
     });
 
