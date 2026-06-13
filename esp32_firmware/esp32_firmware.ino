@@ -21,6 +21,15 @@ PubSubClient mqttClient(espClient);
 const char *serverUrl = "https://rfid-door-one.vercel.app/api/rfid/verify";
 const char *serverUrlFingerprint = "https://rfid-door-one.vercel.app/api/rfid/fingerprint/verify";
 
+// Konfigurasi Kartu Master (OFFLINE MODE)
+// Ganti "XX XX XX XX" dengan UID kartu Anda yang asli. 
+// Kartu ini BISA membuka pintu meskipun tanpa koneksi WiFi!
+const String MASTER_CARDS[] = {
+  "A1 B2 C3 D4", // Contoh Kartu 1
+  "99 88 77 66"  // Contoh Kartu 2
+};
+const int NUM_MASTER_CARDS = 2;
+
 // Konfigurasi Pin RFID & Aktuator
 /* 
  * Panduan Wiring RFID RC522 ke ESP32:
@@ -242,6 +251,27 @@ void loop() {
 }
 
 void verifyCard(String uid) {
+  // 1. Cek Mode Offline (Kartu Master)
+  bool isMaster = false;
+  for (int i = 0; i < NUM_MASTER_CARDS; i++) {
+    if (uid == MASTER_CARDS[i]) {
+      isMaster = true;
+      break;
+    }
+  }
+
+  if (isMaster) {
+    Serial.println("Kartu MASTER dikenali secara OFFLINE!");
+    lcd.clear();
+    lcd.print("Master Offline");
+    lcd.setCursor(0, 1);
+    lcd.print("Akses Diberikan");
+    delay(1000);
+    openDoor();
+    return; // Berhenti di sini, tidak usah cek WiFi
+  }
+
+  // 2. Cek Mode Online (Kartu Biasa)
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     http.begin(serverUrl);
