@@ -12,9 +12,11 @@ app.use(express.json());
 
 // Import routes
 const rfidRoutes = require('./routes/rfid');
+const whatsappRoutes = require('./routes/whatsapp');
 
 // Setup routes
 app.use('/api/rfid', rfidRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -4,10 +4,17 @@
 #include <SPI.h>
 #include <WiFi.h>
 #include <Adafruit_Fingerprint.h>
+#include <PubSubClient.h>
 
 // Konfigurasi WiFi
 const char *ssid = "GPSKU";
 const char *password = "Masuk#2024";
+
+// Konfigurasi MQTT
+const char* mqtt_server = "broker.hivemq.com";
+const char* mqtt_topic = "smartdoor_rfid_12345/command";
+WiFiClient espClient;
+PubSubClient mqttClient(espClient);
 
 // Konfigurasi Backend Node.js
 // IP Laptop Anda saat ini: 192.168.100.174
@@ -63,6 +70,45 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 unsigned long lastReadTime = 0;
 const unsigned long DEBOUNCE_DELAY = 3000; // 3 detik
 
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String message = "";
+  for (unsigned int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  Serial.print("Pesan MQTT masuk [");
+  Serial.print(topic);
+  Serial.print("]: ");
+  Serial.println(message);
+  
+  if (message == "OPEN_DOOR") {
+    Serial.println("Perintah BUKA pintu diterima dari jaringan MQTT!");
+    openDoor();
+    displayReady(); // Kembali ke tampilan siap
+  }
+}
+
+void reconnectMQTT() {
+  // Loop until we're reconnected
+  while (!mqttClient.connected()) {
+    Serial.print("Mencoba koneksi MQTT...");
+    // Create a random client ID
+    String clientId = "ESP32Door-";
+    clientId += String(random(0xffff), HEX);
+    
+    // Attempt to connect
+    if (mqttClient.connect(clientId.c_str())) {
+      Serial.println("terhubung");
+      // Resubscribe
+      mqttClient.subscribe(mqtt_topic);
+    } else {
+      Serial.print("gagal, status=");
+      Serial.print(mqttClient.state());
+      Serial.println(" coba lagi dalam 5 detik...");
+      delay(5000);
+    }
+  }
+}
+
 void setup() {
   Serial.begin(9600);
 
@@ -98,6 +144,10 @@ void setup() {
   lcd.print("WiFi Terhubung!");
   delay(1000);
 
+  // Setup MQTT
+  mqttClient.setServer(mqtt_server, 1883);
+  mqttClient.setCallback(mqttCallback);
+
   // Inisialisasi SPI dan RFID
   SPI.begin(18, 19, 23, 21); // (SCK, MISO, MOSI, SS) Paksa gunakan pin ini
   mfrc522.PCD_Init();
@@ -128,6 +178,14 @@ void setup() {
 }
 
 void loop() {
+  // Jaga koneksi MQTT
+  if (WiFi.status() == WL_CONNECTED) {
+    if (!mqttClient.connected()) {
+      reconnectMQTT();
+    }
+    mqttClient.loop();
+  }
+
   // 1. Cek Sidik Jari
   int fingerId = getFingerprintIDez();
   if (fingerId != -1) {

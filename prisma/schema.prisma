@@ -10,12 +10,13 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(uuid())
-  name         String
-  role         String        // Contoh: Admin, Staff, Guest
-  cards        Card[]
-  fingerprints Fingerprint[] // Relasi baru untuk sidik jari
-  createdAt    DateTime      @default(now())
+  id             String        @id @default(uuid())
+  name           String
+  role           String        // Contoh: Admin, Staff, Guest
+  whatsappNumber String?       @unique // Nomor WA untuk fitur buka via WhatsApp
+  cards          Card[]
+  fingerprints   Fingerprint[] // Relasi baru untuk sidik jari
+  createdAt      DateTime      @default(now())
 }
 
 model Card {
