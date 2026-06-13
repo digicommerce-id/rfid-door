@@ -9,6 +9,8 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+// Middleware to parse URL-encoded bodies (Fonnte sering memakai ini)
+app.use(express.urlencoded({ extended: true }));
 
 // Import routes
 const rfidRoutes = require('./routes/rfid');
